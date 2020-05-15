@@ -160,6 +160,12 @@ class TestDBApiIntegration(TestBase):
             connection4 = dbapi.uninstrument_connection(connection)
         self.assertIs(connection4, connection)
 
+    @mock.patch("opentelemetry.ext.dbapi")
+    def test_instrument(self, mock_dbapi):
+        dbapi.DatabaseApiInstrumentor(mock_dbapi, "connect", "dbapi").instrument()
+        connection = mock_dbapi.connect()
+        self.assertEqual(mock_dbapi.connect.call_count, 1)
+        self.assertIsInstance(connection.__wrapped__, mock.Mock)
 
 # pylint: disable=unused-argument
 def mock_connect(*args, **kwargs):

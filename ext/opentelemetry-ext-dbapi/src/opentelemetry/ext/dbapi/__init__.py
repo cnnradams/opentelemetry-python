@@ -47,6 +47,7 @@ import typing
 import wrapt
 
 from opentelemetry.ext.dbapi.version import __version__
+from opentelemetry.auto_instrumentation.instrumentor import BaseInstrumentor
 from opentelemetry.trace import SpanKind, Tracer, TracerProvider, get_tracer
 from opentelemetry.trace.status import Status, StatusCanonicalCode
 
@@ -346,3 +347,76 @@ def get_traced_cursor_proxy(cursor, db_api_integration, *args, **kwargs):
             )
 
     return TracedCursorProxy(cursor, *args, **kwargs)
+
+
+class DatabaseApiInstrumentor(BaseInstrumentor):
+    def __new__(
+        cls,
+        connect_module: typing.Callable[..., typing.Any],
+        connect_method_name: str,
+        database_component: str,
+        database_type: str = "",
+        connection_attributes: typing.Dict = None,
+        ext_name: str = __name__,
+        ext_version: str = __version__,
+    ):
+        
+        cls._ext_name = ext_name
+        cls._ext_version = ext_version
+        cls._connection_attributes = connection_attributes
+        cls._database_component = database_component
+        cls._database_type = database_type
+        cls._connect_module = connect_module
+        cls._connect_method_name = connect_method_name
+        return super().__new__(cls)
+
+    def _instrument(self, **kwargs):
+        """Integrate with any library following the DBAPI specification
+        """
+        tracer_provider = kwargs.get("tracer_provider")
+
+        tracer = get_tracer(self._ext_name, self._ext_version, tracer_provider)
+
+        wrap_connect(
+            tracer,
+            self._connect_module,
+            self._connect_method_name,
+            self._database_component,
+            self._database_type,
+            self._connection_attributes,
+        )
+
+    def _uninstrument(self, **kwargs):
+        """"Disable MySQL instrumentation"""
+        unwrap_connect(self._connect_module, self._connect_method_name)
+
+    # pylint:disable=no-self-use
+    def instrument_connection(self, connection):
+        """Enable instrumentation in a connection.
+
+        Args:
+            connection: The connection to instrument.
+
+        Returns:
+            An instrumented connection.
+        """
+        tracer = get_tracer(self._ext_name, self._ext_version)
+
+        return instrument_connection(
+            tracer,
+            connection,
+            self._database_component,
+            self._database_type,
+            self._connection_attributes,
+        )
+
+    def uninstrument_connection(self, connection):
+        """Disable instrumentation in a connection.
+
+        Args:
+            connection: The connection to uninstrument.
+
+        Returns:
+            An uninstrumented connection.
+        """
+        return uninstrument_connection(connection)

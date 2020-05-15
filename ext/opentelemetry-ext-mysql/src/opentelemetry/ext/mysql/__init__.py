@@ -46,13 +46,12 @@ import typing
 
 import mysql.connector
 
-from opentelemetry.auto_instrumentation.instrumentor import BaseInstrumentor
-from opentelemetry.ext import dbapi
+from opentelemetry.ext.dbapi import DatabaseApiInstrumentor
 from opentelemetry.ext.mysql.version import __version__
 from opentelemetry.trace import TracerProvider, get_tracer
 
 
-class MySQLInstrumentor(BaseInstrumentor):
+class MySQLInstrumentor(DatabaseApiInstrumentor):
     _CONNECTION_ATTRIBUTES = {
         "database": "database",
         "port": "server_port",
@@ -63,54 +62,14 @@ class MySQLInstrumentor(BaseInstrumentor):
     _DATABASE_COMPONENT = "mysql"
     _DATABASE_TYPE = "sql"
 
-    def _instrument(self, **kwargs):
-        """Integrate with MySQL Connector/Python library.
-        https://dev.mysql.com/doc/connector-python/en/
-        """
-        tracer_provider = kwargs.get("tracer_provider")
-
-        tracer = get_tracer(__name__, __version__, tracer_provider)
-
-        dbapi.wrap_connect(
-            tracer,
+    def __new__(cls):
+        return super().__new__(
+            cls,
             mysql.connector,
             "connect",
-            self._DATABASE_COMPONENT,
-            self._DATABASE_TYPE,
-            self._CONNECTION_ATTRIBUTES,
+            cls._DATABASE_COMPONENT,
+            cls._DATABASE_TYPE,
+            cls._CONNECTION_ATTRIBUTES,
+            __name__,
+            __version__
         )
-
-    def _uninstrument(self, **kwargs):
-        """"Disable MySQL instrumentation"""
-        dbapi.unwrap_connect(mysql.connector, "connect")
-
-    # pylint:disable=no-self-use
-    def instrument_connection(self, connection):
-        """Enable instrumentation in a MySQL connection.
-
-        Args:
-            connection: The connection to instrument.
-
-        Returns:
-            An instrumented connection.
-        """
-        tracer = get_tracer(__name__, __version__)
-
-        return dbapi.instrument_connection(
-            tracer,
-            connection,
-            self._DATABASE_COMPONENT,
-            self._DATABASE_TYPE,
-            self._CONNECTION_ATTRIBUTES,
-        )
-
-    def uninstrument_connection(self, connection):
-        """Disable instrumentation in a MySQL connection.
-
-        Args:
-            connection: The connection to uninstrument.
-
-        Returns:
-            An uninstrumented connection.
-        """
-        return dbapi.uninstrument_connection(connection)

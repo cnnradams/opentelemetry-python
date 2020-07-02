@@ -272,3 +272,16 @@ def get_latch(num):
         cv.release()
 
     return countdown_latch
+
+def TestServerProto():
+    def test_unary_unary():
+        pass
+
+    def test_unary_stream():
+        pass
+
+    def test_stream_unary():
+        pass
+
+    def test_stream_stream():
+        pass
